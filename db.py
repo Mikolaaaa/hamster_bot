@@ -22,6 +22,8 @@ class User(Base):
     coins = Column(Integer, default=0)
     hamster_level = Column(Integer, default=1)  # Уровень хомяка
     multiplier_level = Column(Integer, default=1)  # Уровень множителя
+    passive_income = Column(Integer, default=0)  # Пассивный доход
+    passive_income_level = Column(Integer, default=1)  # Уровень пассивного дохода
 
 async def init_db():
     async with engine.begin() as conn:
