@@ -285,7 +285,7 @@ async def give_passive_income():
                     user.coins += user.passive_income  # Начисляем доход по уровню
                     await update_coins(session, user.id, user.coins)
             await session.commit()
-        await asyncio.sleep(3)  # Каждые 60 минут
+        await asyncio.sleep(3600)  # Каждые 60 минут
 
 @dp.callback_query(StateFilter(Form.shop), F.data == 'buy_passive_income')
 async def process_buy_passive_income(callback_query: types.CallbackQuery, state: FSMContext):
