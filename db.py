@@ -1,16 +1,16 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 
-# Замените строку подключения на свою
-DATABASE_URL = 'postgresql+asyncpg://postgres:1576@localhost:5432/tapalka'
+# Замените строку подключения на SQLite
+DATABASE_URL = 'sqlite+aiosqlite:///./database.db'  # Укажите путь к вашей базе данных SQLite
 
 # Создание асинхронного двигателя
 engine = create_async_engine(DATABASE_URL, echo=True)
 
-# Создание сессии без параметра future
+# Создание сессии
 SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
@@ -23,7 +23,9 @@ class User(Base):
     hamster_level = Column(Integer, default=1)  # Уровень хомяка
     multiplier_level = Column(Integer, default=1)  # Уровень множителя
     passive_income = Column(Integer, default=0)  # Пассивный доход
-    passive_income_level = Column(Integer, default=1)  # Уровень пассивного дохода
+    passive_income_level = Column(Integer, default=0)  # Уровень пассивного дохода
+    total_tap_income = Column(Integer, default=0)  # Новый столбец для тапов
+    total_passive_income = Column(Integer, default=0)  # Новый столбец для пассивного дохода
 
 async def init_db():
     async with engine.begin() as conn:

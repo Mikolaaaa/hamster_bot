@@ -10,6 +10,8 @@ from aiogram.fsm.context import FSMContext
 from db import init_db, get_user, add_user, update_coins, SessionLocal, User
 import random
 from sqlalchemy.future import select
+import os
+from aiogram.types import FSInputFile
 
 API_TOKEN = '7381987351:AAGFo5oor7_tUMdZwHvjT8ltT4BvyIHvbqc'
 
@@ -53,6 +55,38 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     await show_main_menu(message.chat.id, state)
 
+def get_random_hamster_image():
+    hamster_folder = 'hamsters/'  # Папка с изображениями
+    hamster_images = os.listdir(hamster_folder)  # Получаем список файлов в папке
+    print(hamster_images)
+    random_image = random.choice(hamster_images)  # Выбираем случайное изображение
+    print(random_image)
+    return os.path.join(hamster_folder, random_image)  # Возвращаем полный путь к изображению
+
+@dp.callback_query(StateFilter(Form.main_menu), F.data == 'show_hamster')
+async def process_show_hamster(callback_query: types.CallbackQuery, state: FSMContext):
+    hamster_image_path = get_random_hamster_image()  # Получаем случайное изображение
+    print(f"hamster_image_path {hamster_image_path}")
+
+    # Проверяем, существует ли файл
+    if os.path.isfile(hamster_image_path):
+        # Создаем объект InputFile
+        photo = FSInputFile(hamster_image_path)  # Открываем файл
+
+        # Отправляем изображение пользователю с подписью
+        await bot.send_photo(
+            chat_id=callback_query.from_user.id,
+            photo=photo,
+            caption="Вот ваш хомячок! 🐹",
+            disable_notification=True  # Отключаем уведомления
+        )
+    else:
+        await bot.send_message(callback_query.from_user.id, "Изображение не найдено.")
+
+    # Возвращаемся в главное меню
+    await show_main_menu(callback_query.from_user.id, state)
+
+
 # Основное меню
 async def show_main_menu(chat_id: int, state: FSMContext):
     state_data = await state.get_data()
@@ -64,15 +98,15 @@ async def show_main_menu(chat_id: int, state: FSMContext):
         button1 = types.InlineKeyboardButton(text="💰 Нажми на хомячка", callback_data='click_hamster')
         button2 = types.InlineKeyboardButton(text="🏆 Магазин", callback_data='shop')
         button3 = types.InlineKeyboardButton(text="🎮 Игры", callback_data='game_menu')
-        button4 = types.InlineKeyboardButton(text="📊 Статистика", callback_data='stats')
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3], [button4]])
+        button4 = types.InlineKeyboardButton(text="📊 Статистика по монетам", callback_data='stats')
+        button5 = types.InlineKeyboardButton(text="🐹 Показать хомяка", callback_data='show_hamster')
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3], [button4], [button5]])
 
         await bot.send_message(chat_id,
-                               f'У вас {user.coins} монет.\n'
-                               f'Уровень хомяка: {user.hamster_level}\n'
-                               f'Множитель: {user.multiplier_level}\n'
-                               f'Пассивный доход: {user.passive_income} монет/час\n'
-                               'Выберите действие',
+                               f'💰 Баланс: {user.coins} монет.\n'
+                               f'🐹 Уровень хомяка: {user.hamster_level}\n'
+                               f'🔝 Множитель: {user.multiplier_level}\n'
+                               f'⏳ Пассивный доход: {user.passive_income} монет/час\n',
                                reply_markup=keyboard
                                )
 
@@ -228,7 +262,10 @@ async def process_hamster_click(callback_query: types.CallbackQuery, state: FSMC
         if not user:
             await add_user(session, user_id)  # Инициализация данных пользователя
 
+        earned_coins = user.multiplier_level
         user.coins += user.multiplier_level  # Увеличиваем количество монет с учетом уровня множителя
+        user.total_tap_income += earned_coins  # Увеличиваем счетчик заработанных от тапов
+
         await update_coins(session, user_id, user.coins)
 
         await bot.answer_callback_query(callback_query.id)
@@ -241,14 +278,13 @@ async def process_hamster_click(callback_query: types.CallbackQuery, state: FSMC
 
         await show_main_menu(callback_query.from_user.id, state)
 
-
 @dp.callback_query(StateFilter(Form.shop), F.data == 'buy_hamster_level')
 async def process_buy_hamster_level(callback_query: types.CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     async with SessionLocal() as session:
         user = await get_user(session, user_id)
 
-        cost = (user.hamster_level + 1) ** 3
+        cost = (user.hamster_level + 1) ** 2
 
         if user.coins >= cost:  # Проверяем, достаточно ли монет
             user.coins -= cost
@@ -266,7 +302,7 @@ async def process_buy_multiplier(callback_query: types.CallbackQuery, state: FSM
         user = await get_user(session, user_id)
 
         # Определите стоимость уровня множителя (например, 10 монет за уровень)
-        cost = (user.multiplier_level + 1) ** 3
+        cost = (user.multiplier_level + 1) ** 2
         if user.coins >= cost:
             user.coins -= cost
             user.multiplier_level += 1  # Увеличиваем уровень множителя
@@ -283,7 +319,15 @@ async def give_passive_income():
             for user in users.scalars().all():
                 if user.passive_income > 0:
                     user.coins += user.passive_income  # Начисляем доход по уровню
+                    user.total_passive_income += user.passive_income  # Увеличиваем счетчик заработанного от пассивного дохода
                     await update_coins(session, user.id, user.coins)
+
+                    # Отправляем сообщение без звука и вибрации
+                    await bot.send_message(
+                        chat_id=user.id,
+                        text=f"🎉 Вам начислено {user.passive_income} монет от пассивного дохода!",
+                        disable_notification=True  # Отключаем уведомления
+                    )
             await session.commit()
         await asyncio.sleep(3600)  # Каждые 60 минут
 
@@ -296,14 +340,14 @@ async def process_buy_passive_income(callback_query: types.CallbackQuery, state:
         # Логика стоимости для каждого уровня
         # cost = 100 * user.passive_income_level  # Стоимость растет с уровнем
         income_increase = 10 * user.passive_income_level  # Увеличение дохода зависит от уровня
-        cost = (income_increase + 10) ** 2
+        cost = 10 * ((user.passive_income_level + 1) ** 2)
         if user.passive_income_level == 0:
             income_increase = 10
-            cost = 100
+            cost = 10
 
         if user.coins >= cost:
             user.coins -= cost
-            user.passive_income += income_increase  # Увеличиваем доход
+            user.passive_income += 10  # Увеличиваем доход
             user.passive_income_level += 1  # Повышаем уровень пассивного дохода
             await session.commit()
             await callback_query.answer(f"Теперь у вас пассивный доход {user.passive_income} монет/час (уровень {user.passive_income_level}).")
@@ -315,7 +359,8 @@ async def process_buy_passive_income(callback_query: types.CallbackQuery, state:
 async def process_game_menu(callback_query: types.CallbackQuery, state: FSMContext):
     button1 = types.InlineKeyboardButton(text="🎲 Орел/Решка", callback_data='coinflip')
     button2 = types.InlineKeyboardButton(text="🔢 Угадай число", callback_data='guess_number')
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2]])
+    button3 = types.InlineKeyboardButton(text="🛒 Вернуться в главное меню", callback_data='start')
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3]])
 
     await bot.edit_message_text(
         text="Выберите игру:",
@@ -335,15 +380,15 @@ async def process_shop(callback_query: types.CallbackQuery, state: FSMContext):
 
         # Определяем стоимость и уровень
         next_level_cost = 10 * ((user.passive_income_level + 1) ** 2)
-        cost_buy_multiplier = (user.multiplier_level + 1) ** 3
-        cost_hamster_level = (user.hamster_level + 1) ** 3
+        cost_buy_multiplier = (user.multiplier_level + 1) ** 2
+        cost_hamster_level = (user.hamster_level + 1) ** 2
 
         button1 = types.InlineKeyboardButton(text=f"🏅 Купить {user.multiplier_level + 1} уровень множителя за {cost_buy_multiplier} монет",
                                              callback_data='buy_multiplier')
         button2 = types.InlineKeyboardButton(text=f"🥇 Купить {user.hamster_level + 1} уровень хомяка за {cost_hamster_level} монет",
                                              callback_data='buy_hamster_level')
         button3 = types.InlineKeyboardButton(
-            text=f"💸 Купить пассивный доход (уровень {user.passive_income_level + 1}) за {next_level_cost} монет",
+            text=f"💸 Купить пассивный доход {user.passive_income + 10} монет/час за {next_level_cost} монет",
             callback_data='buy_passive_income')
         button4 = types.InlineKeyboardButton(text="🛒 Вернуться в главное меню", callback_data='main_menu')
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3], [button4]])
@@ -386,10 +431,20 @@ async def process_stats(callback_query: types.CallbackQuery, state: FSMContext):
     async with SessionLocal() as session:
         user = await get_user(session, user_id)
 
+        stats_message = (
+            f'**Статистика пользователя**:\n\n'
+            f'💰 Текущий баланс: {user.coins}\n'
+            f'💷 Заработано всего: {user.total_tap_income + user.total_passive_income}\n'
+            f'💸 Заработано от тапов: {user.total_tap_income}\n'
+            f'📈 Заработано от пассивного дохода: {user.total_passive_income}\n'
+            f'💶 Потрачено: {user.total_tap_income + user.total_passive_income - user.coins}\n'
+        )
+
         await bot.edit_message_text(
-            text=f'Вы заработали {user.coins} монет.',
+            text=stats_message,
             chat_id=callback_query.from_user.id,
             message_id=callback_query.message.message_id,
+            parse_mode='Markdown'
         )
         await show_main_menu(callback_query.from_user.id, state)
 
