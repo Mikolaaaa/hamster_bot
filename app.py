@@ -383,13 +383,6 @@ async def give_passive_income():
                     user.coins += user.passive_income  # Начисляем доход по уровню
                     user.total_passive_income += user.passive_income  # Увеличиваем счетчик заработанного от пассивного дохода
                     await update_coins(session, user.id, user.coins)
-
-                    # Отправляем сообщение без звука и вибрации
-                    await bot.send_message(
-                        chat_id=user.id,
-                        text=f"🎉 Вам начислено {user.passive_income} монет от пассивного дохода!",
-                        disable_notification=True  # Отключаем уведомления
-                    )
             await session.commit()
         await asyncio.sleep(3600)  # Каждые 60 минут
 
