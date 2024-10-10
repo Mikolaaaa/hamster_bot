@@ -102,7 +102,14 @@ async def show_main_menu(chat_id: int, state: FSMContext):
         button3 = types.InlineKeyboardButton(text="🎮 Игры", callback_data='game_menu')
         button4 = types.InlineKeyboardButton(text="📊 Статистика по монетам", callback_data='stats')
         button5 = types.InlineKeyboardButton(text="🐹 Показать хомяка", callback_data='show_hamster')
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3], [button4], [button5]])
+        # Проверка на ваш ID
+        if user_id == 1131742460:
+            admin_button = types.InlineKeyboardButton(text="🔧 Админ-панель", callback_data='admin_panel')
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[[button1], [button2], [button3], [button4], [button5], [admin_button]])
+        else:
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[[button1], [button2], [button3], [button4], [button5]])
 
         await bot.send_message(chat_id,
                                f'💰 Баланс: {user.coins} монет.\n'
@@ -114,6 +121,29 @@ async def show_main_menu(chat_id: int, state: FSMContext):
 
         # Устанавливаем состояние
         await state.set_state(Form.main_menu)
+
+
+@dp.callback_query(F.data == 'admin_panel')
+async def admin_panel(callback_query: types.CallbackQuery):
+    if callback_query.from_user.id != 1131742460:
+        await callback_query.answer("У вас нет доступа к админ-панели.")
+        return
+
+    async with SessionLocal() as session:
+        result = await session.execute(select(User))
+        users = result.scalars().all()  # Получаем список всех пользователей
+        stats_message = "Статистика пользователей:\n"
+
+        for user in users:
+            try:
+                # Получаем информацию о пользователе
+                chat_info = await bot.get_chat(user.id)
+                username_link = f"@{chat_info.username}" if chat_info.username else "Без ника"
+                stats_message += f"ID: {user.id}, Ник: {username_link}, Монеты: {user.coins}\n"
+            except Exception as e:
+                stats_message += f"ID: {user.id}, Ошибка: {str(e)}\n"
+
+        await bot.send_message(callback_query.from_user.id, stats_message)
 
 
 # Обработка нажатия на кнопку "Игра: Угадай число"
