@@ -353,6 +353,7 @@ async def process_buy_hamster_level(callback_query: types.CallbackQuery, state: 
             await callback_query.answer("Вы подняли уровень хомяка!")
         else:
             await callback_query.answer("Недостаточно монет!")
+    await process_shop(callback_query, state)  # Обновляем магазин
 
 @dp.callback_query(StateFilter(Form.shop), F.data == 'buy_multiplier')
 async def process_buy_multiplier(callback_query: types.CallbackQuery, state: FSMContext):
@@ -370,6 +371,7 @@ async def process_buy_multiplier(callback_query: types.CallbackQuery, state: FSM
             await callback_query.answer(f"Вы купили уровень множителя! Теперь у вас уровень: {user.multiplier_level}.")
         else:
             await callback_query.answer("Недостаточно монет!")
+    await process_shop(callback_query, state)  # Обновляем магазин
 
 
 async def give_passive_income():
@@ -414,6 +416,8 @@ async def process_buy_passive_income(callback_query: types.CallbackQuery, state:
         else:
             await callback_query.answer(f"Недостаточно монет для покупки пассивного дохода. Нужно {cost} монет.")
 
+    await process_shop(callback_query, state)  # Обновляем магазин
+
 # Обработка нажатия на кнопку "Игра"
 @dp.callback_query(StateFilter(Form.main_menu), F.data == 'game_menu')
 async def process_game_menu(callback_query: types.CallbackQuery, state: FSMContext):
@@ -445,12 +449,12 @@ async def process_shop(callback_query: types.CallbackQuery, state: FSMContext):
         cost_buy_multiplier = (user.multiplier_level + 1) ** 3
         cost_hamster_level = (user.hamster_level + 1) ** 3
 
-        button1 = types.InlineKeyboardButton(text=f"🏅 Купить {user.multiplier_level + 1} уровень множителя за {cost_buy_multiplier} монет",
+        button1 = types.InlineKeyboardButton(text=f"🏅 {user.multiplier_level + 1}х множитель - {cost_buy_multiplier} монет",
                                              callback_data='buy_multiplier')
-        button2 = types.InlineKeyboardButton(text=f"🥇 Купить {user.hamster_level + 1} уровень хомяка за {cost_hamster_level} монет",
+        button2 = types.InlineKeyboardButton(text=f"🥇 {user.hamster_level + 1} уровень - {cost_hamster_level} монет",
                                              callback_data='buy_hamster_level')
         button3 = types.InlineKeyboardButton(
-            text=f"💸 Купить пассивный доход {user.passive_income + 10} монет/час за {next_level_cost} монет",
+            text=f"💸 {user.passive_income + 10} монет/час - {next_level_cost} монет",
             callback_data='buy_passive_income')
         button4 = types.InlineKeyboardButton(text="🛒 Вернуться в главное меню", callback_data='main_menu')
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3], [button4]])
