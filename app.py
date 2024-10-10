@@ -13,6 +13,7 @@ from sqlalchemy.future import select
 import os
 from aiogram.types import FSInputFile
 
+
 API_TOKEN = '7381987351:AAGFo5oor7_tUMdZwHvjT8ltT4BvyIHvbqc'
 
 # Включаем логирование
@@ -36,6 +37,7 @@ class Form(StatesGroup):
     coinflip_bet = State()
     guess_number_choice = State()  # Новое состояние для выбора числа
     guess_number_bet = State()     # Новое состояние для выбора ставки в игре с числами
+    click_hamster = State()
 
 
 # Команда старт
@@ -251,32 +253,93 @@ async def process_main_menu(callback_query: types.CallbackQuery, state: FSMConte
     await show_main_menu(callback_query.from_user.id, state)
 
 
-# Обработка нажатия на кнопку "Нажми на хомячка"
 @dp.callback_query(StateFilter(Form.main_menu), F.data == 'click_hamster')
 async def process_hamster_click(callback_query: types.CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
+    # Начинаем подсчет кликов
+    await state.set_state(Form.click_hamster)
+    await state.update_data(clicks=0)  # Инициализация количества кликов
 
-    state_data = await state.get_data()
+    # Создаем кнопки
+    button1 = types.KeyboardButton(text="Клик")
+    button2 = types.KeyboardButton(text="Стоп")
+    keyboard = types.ReplyKeyboardMarkup(keyboard=[[button1], [button2]], resize_keyboard=True)
+
+    await bot.send_message(
+        chat_id=callback_query.from_user.id,
+        text='Начинайте нажимать на кнопку "Клик".',
+        reply_markup=keyboard  # Добавляем кнопки
+    )
+
+
+# Обработчик сообщений "Клик"
+@dp.message(StateFilter(Form.click_hamster), F.text == 'Клик')
+async def handle_click_message(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    clicks = data.get('clicks', 0) + 1  # Увеличиваем количество кликов
+    await state.update_data(clicks=clicks)  # Обновляем состояние
+
+    await message.answer(f'Вы нажали на хомячка! Всего кликов: {clicks}.')
+
+
+# Обработчик сообщений "Стоп"
+@dp.message(StateFilter(Form.click_hamster), F.text == 'Стоп')
+async def handle_stop_message(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    clicks = data.get('clicks', 0)
+
     async with SessionLocal() as session:
-        user = await get_user(session, user_id)
+        user = await get_user(session, message.from_user.id)
         if not user:
-            await add_user(session, user_id)  # Инициализация данных пользователя
+            await add_user(session, message.from_user.id)
+            user = await get_user(session, message.from_user.id)
 
-        earned_coins = user.multiplier_level
-        user.coins += user.multiplier_level  # Увеличиваем количество монет с учетом уровня множителя
-        user.total_tap_income += earned_coins  # Увеличиваем счетчик заработанных от тапов
+        # Обновляем количество монет
+        user.coins += clicks
+        await update_coins(session, message.from_user.id, user.coins)
 
-        await update_coins(session, user_id, user.coins)
+    await message.answer(f'Вы остановили игру! Вы заработали {clicks} монет. У вас сейчас {user.coins} монет.')
 
-        await bot.answer_callback_query(callback_query.id)
+    # Удаляем клавиатуру
+    await message.answer('Игра завершена.', reply_markup=types.ReplyKeyboardRemove())
 
-        await bot.edit_message_text(
-            text=f'Вы нажали на хомячка! У вас сейчас {user.coins} монет.',
-            chat_id=callback_query.from_user.id,
-            message_id=callback_query.message.message_id,
+    await state.set_state(Form.click_hamster)  # Возвращаем в главное меню
+    await show_main_menu(message.from_user.id, state)
+
+
+"""# Обработчик кликов
+@dp.message(StateFilter(Form.click_hamster), F.content_type == types.ContentType.TEXT)
+async def handle_clicks(message: types.Message, state: FSMContext):
+    if message.text.lower() == 'стоп':
+        data = await state.get_data()
+        clicks = data.get('clicks', 0)
+
+        async with SessionLocal() as session:
+            user = await get_user(session, message.from_user.id)
+            if not user:
+                await add_user(session, message.from_user.id)
+                user = await get_user(session, message.from_user.id)
+
+            # Обновляем количество монет
+            user.coins += clicks
+            await update_coins(session, message.from_user.id, user.coins)
+
+        await bot.send_message(
+            chat_id=message.from_user.id,
+            text=f'Вы остановили игру! Вы заработали {clicks} монет. У вас сейчас {user.coins} монет.'
         )
 
-        await show_main_menu(callback_query.from_user.id, state)
+        await state.set_state(Form.click_hamster)# Устанавливаем состояние
+        await show_main_menu(message.from_user.id, state)
+    else:
+        # Увеличиваем количество кликов и обновляем состояние
+        data = await state.get_data()
+        clicks = data.get('clicks', 0) + 1
+        await state.update_data(clicks=clicks)
+
+        await bot.send_message(
+            chat_id=message.from_user.id,
+            text=f'Вы нажали на хомячка! Всего кликов: {clicks}.'
+        )"""
 
 @dp.callback_query(StateFilter(Form.shop), F.data == 'buy_hamster_level')
 async def process_buy_hamster_level(callback_query: types.CallbackQuery, state: FSMContext):
@@ -284,7 +347,7 @@ async def process_buy_hamster_level(callback_query: types.CallbackQuery, state: 
     async with SessionLocal() as session:
         user = await get_user(session, user_id)
 
-        cost = (user.hamster_level + 1) ** 2
+        cost = (user.hamster_level + 1) ** 3
 
         if user.coins >= cost:  # Проверяем, достаточно ли монет
             user.coins -= cost
@@ -302,7 +365,7 @@ async def process_buy_multiplier(callback_query: types.CallbackQuery, state: FSM
         user = await get_user(session, user_id)
 
         # Определите стоимость уровня множителя (например, 10 монет за уровень)
-        cost = (user.multiplier_level + 1) ** 2
+        cost = (user.multiplier_level + 1) ** 3
         if user.coins >= cost:
             user.coins -= cost
             user.multiplier_level += 1  # Увеличиваем уровень множителя
@@ -380,8 +443,8 @@ async def process_shop(callback_query: types.CallbackQuery, state: FSMContext):
 
         # Определяем стоимость и уровень
         next_level_cost = 10 * ((user.passive_income_level + 1) ** 2)
-        cost_buy_multiplier = (user.multiplier_level + 1) ** 2
-        cost_hamster_level = (user.hamster_level + 1) ** 2
+        cost_buy_multiplier = (user.multiplier_level + 1) ** 3
+        cost_hamster_level = (user.hamster_level + 1) ** 3
 
         button1 = types.InlineKeyboardButton(text=f"🏅 Купить {user.multiplier_level + 1} уровень множителя за {cost_buy_multiplier} монет",
                                              callback_data='buy_multiplier')
