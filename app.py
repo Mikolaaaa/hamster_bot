@@ -124,7 +124,7 @@ async def show_main_menu(chat_id: int, state: FSMContext):
 
 
 @dp.callback_query(F.data == 'admin_panel')
-async def admin_panel(callback_query: types.CallbackQuery):
+async def admin_panel(callback_query: types.CallbackQuery, state: FSMContext):
     if callback_query.from_user.id != 1131742460:
         await callback_query.answer("У вас нет доступа к админ-панели.")
         return
@@ -144,6 +144,7 @@ async def admin_panel(callback_query: types.CallbackQuery):
                 stats_message += f"ID: {user.id}, Ошибка: {str(e)}\n"
 
         await bot.send_message(callback_query.from_user.id, stats_message)
+        await show_main_menu(callback_query.from_user.id, state)
 
 
 # Обработка нажатия на кнопку "Игра: Угадай число"
