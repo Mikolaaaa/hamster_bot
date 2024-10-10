@@ -278,7 +278,7 @@ async def choose_bet(message: types.Message, state: FSMContext):
         # Возвращаемся в главное меню
         await show_main_menu(user_id, state)
 
-@dp.callback_query(StateFilter(Form.shop), F.data == 'main_menu')
+@dp.callback_query(F.data == 'main_menu')
 async def process_main_menu(callback_query: types.CallbackQuery, state: FSMContext):
     await show_main_menu(callback_query.from_user.id, state)
 
@@ -336,41 +336,6 @@ async def handle_stop_message(message: types.Message, state: FSMContext):
     await state.set_state(Form.click_hamster)  # Возвращаем в главное меню
     await show_main_menu(message.from_user.id, state)
 
-
-"""# Обработчик кликов
-@dp.message(StateFilter(Form.click_hamster), F.content_type == types.ContentType.TEXT)
-async def handle_clicks(message: types.Message, state: FSMContext):
-    if message.text.lower() == 'стоп':
-        data = await state.get_data()
-        clicks = data.get('clicks', 0)
-
-        async with SessionLocal() as session:
-            user = await get_user(session, message.from_user.id)
-            if not user:
-                await add_user(session, message.from_user.id)
-                user = await get_user(session, message.from_user.id)
-
-            # Обновляем количество монет
-            user.coins += clicks
-            await update_coins(session, message.from_user.id, user.coins)
-
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text=f'Вы остановили игру! Вы заработали {clicks} монет. У вас сейчас {user.coins} монет.'
-        )
-
-        await state.set_state(Form.click_hamster)# Устанавливаем состояние
-        await show_main_menu(message.from_user.id, state)
-    else:
-        # Увеличиваем количество кликов и обновляем состояние
-        data = await state.get_data()
-        clicks = data.get('clicks', 0) + 1
-        await state.update_data(clicks=clicks)
-
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text=f'Вы нажали на хомячка! Всего кликов: {clicks}.'
-        )"""
 
 @dp.callback_query(StateFilter(Form.shop), F.data == 'buy_hamster_level')
 async def process_buy_hamster_level(callback_query: types.CallbackQuery, state: FSMContext):
@@ -453,7 +418,7 @@ async def process_buy_passive_income(callback_query: types.CallbackQuery, state:
 async def process_game_menu(callback_query: types.CallbackQuery, state: FSMContext):
     button1 = types.InlineKeyboardButton(text="🎲 Орел/Решка", callback_data='coinflip')
     button2 = types.InlineKeyboardButton(text="🔢 Угадай число", callback_data='guess_number')
-    button3 = types.InlineKeyboardButton(text="🛒 Вернуться в главное меню", callback_data='start')
+    button3 = types.InlineKeyboardButton(text="🛒 Вернуться в главное меню", callback_data='main_menu')
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[button1], [button2], [button3]])
 
     await bot.edit_message_text(
@@ -462,6 +427,8 @@ async def process_game_menu(callback_query: types.CallbackQuery, state: FSMConte
         message_id=callback_query.message.message_id,
         reply_markup=keyboard
     )
+
+    await state.set_state(Form.main_menu)
 
 # Обработка нажатия на кнопку "Магазин"
 @dp.callback_query(StateFilter(Form.main_menu), F.data == 'shop')
