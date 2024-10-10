@@ -325,6 +325,7 @@ async def handle_stop_message(message: types.Message, state: FSMContext):
 
         # Обновляем количество монет
         user.coins += clicks
+        user.total_tap_income += clicks # Увеличиваем счетчик заработанного от тапов
         await update_coins(session, message.from_user.id, user.coins)
 
     await message.answer(f'Вы остановили игру! Вы заработали {clicks} монет. У вас сейчас {user.coins} монет.')
